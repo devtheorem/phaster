@@ -25,6 +25,7 @@ class PgsqlDbTest extends DbTestCase
 
             self::$db = new PeachySql($pdo);
             self::createTestTable(self::$db);
+            assert(self::$db !== null);
         }
 
         return self::$db;
