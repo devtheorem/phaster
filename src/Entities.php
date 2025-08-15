@@ -217,7 +217,6 @@ abstract class Entities
         foreach ($existingIds as $offset => $id) {
             array_splice($ids, $offset, 0, [$id]);
         }
-        /** @phpstan-ignore return.type */
         return $ids;
     }
 

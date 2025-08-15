@@ -33,7 +33,7 @@ class Prop
         public readonly bool $isDefault = true,
         public readonly string $alias = '',
         public readonly ?string $type = null,
-        public readonly DateTimeZone|null|false $timeZone = false,
+        public readonly DateTimeZone|false|null $timeZone = false,
         public readonly ?Closure $getValue = null,
         public readonly array $dependsOn = [],
         bool $output = true,
