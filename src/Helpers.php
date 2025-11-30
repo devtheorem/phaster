@@ -191,12 +191,11 @@ class Helpers
 
                 if ($data->nullGroup) {
                     // check if any selected field is a child
-                    $parents = $data->parents;
-                    $parent = $parents[array_key_last($parents)];
-                    $length = strlen($parent);
+                    assert($data->parents !== []);
+                    $parent = $data->parents[array_key_last($data->parents)];
 
                     foreach ($fieldProps as $field => $_val) {
-                        if (substr($field, 0, $length) === $parent) {
+                        if (str_starts_with($field, $parent)) {
                             $dependedOn[$prop] = true;
                             break;
                         }
