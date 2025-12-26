@@ -5,10 +5,9 @@ namespace DevTheorem\Phaster\Test;
 use DevTheorem\PeachySQL\PeachySql;
 use DevTheorem\Phaster\Test\src\App;
 use PDO;
+use PHPUnit\Framework\Attributes\Group;
 
-/**
- * @group mssql
- */
+#[Group('mssql')]
 class MssqlDbTest extends DbTestCase
 {
     private static ?PeachySql $db = null;
