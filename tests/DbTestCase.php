@@ -320,6 +320,16 @@ abstract class DbTestCase extends TestCase
         $ids = $entities->addEntities($users);
         $this->assertSame(-42, $ids[1]); // manually set ID in processValues
 
+        // afterInsert receives only the inserted rows, with IDs parallel to them (excluding the
+        // manually set existing ID at index 1)
+        $insertedIds = $ids;
+        array_splice($insertedIds, 1, 1);
+        $this->assertNotNull($entities->afterInsertResult);
+        $this->assertSame($insertedIds, $entities->afterInsertResult['ids']);
+        $this->assertCount(9, $entities->afterInsertResult['rows']);
+        $this->assertSame('Modern user 1', $entities->afterInsertResult['rows'][0]['name']);
+        $this->assertSame('Modern user 3 modified', $entities->afterInsertResult['rows'][1]['name']);
+
         $db->insertRow('UserThings', ['user_id' => $ids[3]]);
 
         $actual = $entities->getEntitiesByIds([$ids[2], $ids[3]], ['id', 'name', 'isDisabled', 'computed', 'thing.uid']);

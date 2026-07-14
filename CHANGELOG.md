@@ -1,10 +1,21 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-07-15
+
+### Added
+- `afterInsert()` hook which runs after rows are inserted, before their IDs are returned.
+It receives the inserted rows and their IDs, enabling follow-up work that depends on a successful insert.
+
+### Changed
+- PHP 8.2+ is now required.
+
+
 ## [4.0.0] - 2025-01-03
+
 ### Changed
 - `getMap()` is no longer abstract and returns an empty array by default,
 so it is no longer necessary to implement for read-only APIs.
@@ -22,7 +33,9 @@ properties when using `getSelectProps()`.
 - Unnecessary `getDefaultValues()` method. Defaults can be set via `processValues()` instead.
 - `writableId` bool property.
 
+
 ## [3.0.0] - 2024-10-29
+
 ### Added
 - Official support for PostgreSQL.
 
@@ -36,23 +49,27 @@ properties when using `getSelectProps()`.
 
 
 ## [2.9.0] - 2024-09-10
+
 ### Added
 - `processValues()` now allows setting the ID of an existing row on the returned object, in which
 case a new row will not be inserted, and the specified ID will be returned in the list of row IDs.
 
 
 ## [2.8.0] - 2023-12-22
+
 ### Added
 - `countEntities()` method and corresponding `count()` route handler.
 This allows counting the rows that match a query/filter without selecting them.
 
 
 ## [2.7.0] - 2023-09-27
+
 ### Added
 - `writableId` bool property to optionally make the ID column writable.
 
 
 ## [2.6.0] - 2023-08-01
+
 ### Added
 - `output` bool parameter on `Prop` constructor.
 
@@ -64,6 +81,7 @@ This allows counting the rows that match a query/filter without selecting them.
 
 
 ## [2.5.0] - 2023-03-05
+
 ### Changed
 - Minor code cleanup and refactoring.
 
@@ -75,6 +93,7 @@ is to add custom checks and errors for conflicts that can occur during normal us
 
 
 ## [2.4.0] - 2022-11-06
+
 ### Added
 - `getSelectProps()` method as a preferred alternative to `getPropMap()` when using PHP 8+.
 
@@ -86,6 +105,7 @@ is to add custom checks and errors for conflicts that can occur during normal us
 
 
 ## [2.3.0] - 2021-12-15
+
 ### Added
 - `getBaseSelect()` method to support bound params in base select query.
 
@@ -95,22 +115,26 @@ This makes it possible to generate secondary filters using a subset of propertie
 
 
 ## [2.2.2] - 2021-08-15
+
 ### Changed
 - Internal refactoring and static analysis improvements.
 
 
 ## [2.2.1] - 2021-02-22
+
 ### Changed
 - Specified additional types and enabled Psalm static analysis.
 - PHP 7.4+ is now required.
 
 
 ## [2.2.0] Primordial Refinement - 2020-03-22
+
 ### Added
 - `getOriginalFilter()` method to `QueryOptions` for retrieving the unprocessed filter array.
 
 
 ## [2.1.0] Benevolent Mystique - 2019-08-05
+
 ### Added
 - `processRow()` method to alter a row directly before it is inserted or
 updated. Useful for setting columns that aren't in the property map.
@@ -122,6 +146,7 @@ if no rows were affected (e.g. if the request didn't change the value of any pro
 
 
 ## [2.0.0] Pressurized Arrangement - 2019-03-22
+
 ### Added
 - `$sort` parameter to `getEntitiesByIds()`.
 
@@ -135,12 +160,14 @@ and `rowsToJson()` methods.
 
 
 ## [1.2.2] Pasteurized Recognition - 2019-03-04
+
 ### Fixed
 - `getById()` route handler now respects `fields` parameter and only selects
 the specified properties.
 
 
 ## [1.2.1] Reliant Progenitor - 2019-02-24
+
 ### Added
 - Support for specifying dependent fields along with `getValue()` function.
 Dependents of requested fields that weren't explicitly requested, or
@@ -153,6 +180,7 @@ set to null as expected. Previously only the direct parent of a selected field w
 
 
 ## [1.2.0] Emancipation Propagation - 2019-02-22
+
 ### Added
 - Default and maximum limit can now be configured for each search route.
 If not configured, these are set to 25 and 1000, respectively.
@@ -174,6 +202,7 @@ inserts/updates/deletes, override the table's ID column name by setting an `id` 
 
 
 ## [1.1.1] Maximal Limitation - 2019-01-16
+
 ### Fixed
 - Error when requesting the maximum page size of 1000.
 
@@ -182,6 +211,7 @@ inserts/updates/deletes, override the table's ID column name by setting an `id` 
 
 
 ## [1.1.0] Ambiguous Identity - 2019-01-11
+
 ### Added
 - `getSelectId()` method to optionally override the column used to get entities by ID.
 Necessary when a joined table has a column with the same name as the ID column.
@@ -190,21 +220,25 @@ This makes it easy for API clients to see if there are more results to request.
 
 
 ## [1.0.2] Optimal Fixture - 2017-05-16
+
 ### Changed
 - Methods for retrieving, patching, and deleting entities by IDs now
 return early if passed an empty IDs array.
 
 
 ## [1.0.1] Exacting Characteristic - 2017-03-14
+
 ### Changed
 - `RouteHandler` now ensures that search parameters have the correct type.
 
 
 ## [1.0.0] Cosmic Luminary - 2017-03-09
+
 ### Changed
 - Initial stable release
 
 
+[4.1.0]: https://github.com/devtheorem/phaster/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/devtheorem/phaster/compare/v3.0.0...v4.0.0
 [3.0.0]: https://github.com/devtheorem/phaster/compare/v2.9.0...v3.0.0
 [2.9.0]: https://github.com/devtheorem/phaster/compare/v2.8.0...v2.9.0

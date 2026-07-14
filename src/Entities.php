@@ -142,6 +142,14 @@ abstract class Entities
     }
 
     /**
+     * Runs after rows are inserted, before their IDs are returned.
+     * The arrays are parallel: $ids[$i] is the generated ID of $rows[$i].
+     * @param list<int> $ids
+     * @param list<array<string, mixed>> $rows the inserted column/value rows
+     */
+    protected function afterInsert(array $ids, array $rows): void {}
+
+    /**
      * @param list<string|int> $ids
      */
     public function deleteByIds(array $ids): int
@@ -214,9 +222,12 @@ abstract class Entities
         }
 
         $ids = $this->db->insertRows($this->getTableName(), $rows, $this->getIdentityIncrement())->ids;
+        $this->afterInsert($ids, $rows); // $ids is parallel to $rows before existing IDs are merged in
+
         foreach ($existingIds as $offset => $id) {
             array_splice($ids, $offset, 0, [$id]);
         }
+
         return $ids;
     }
 

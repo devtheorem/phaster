@@ -6,6 +6,9 @@ use DevTheorem\Phaster\{Entities, Prop, QueryOptions};
 
 class ModernUsers extends Entities
 {
+    /** @var array{ids: list<int>, rows: list<array<string, mixed>>}|null */
+    public ?array $afterInsertResult = null;
+
     protected function getTableName(): string
     {
         return 'Users';
@@ -62,5 +65,10 @@ class ModernUsers extends Entities
         }
 
         return $data;
+    }
+
+    protected function afterInsert(array $ids, array $rows): void
+    {
+        $this->afterInsertResult = ['ids' => $ids, 'rows' => $rows];
     }
 }
