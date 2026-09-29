@@ -19,7 +19,7 @@
     "require": {
         "php": ">=8.2",
         "ext-pdo": "*",
-        "devtheorem/peachy-sql": "^7.0.1",
+        "devtheorem/peachy-sql": "^7.1",
         "psr/http-message": "^1.1 || ^2.0",
         "shrikeh/teapot": "^3.0"
     },

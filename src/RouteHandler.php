@@ -175,8 +175,8 @@ class RouteHandler
                 $body = ['ids' => $instance->addEntities($data)];
             } else {
                 $ids = $instance->addEntities([$data]);
-                // ID isn't set when the ID column isn't auto-incremented
-                $body = ['id' => $ids[0] ?? $data[$instance->idField]];
+                // no ID is returned for SQL Server views with an INSTEAD OF INSERT trigger
+                $body = ['id' => $ids[0] ?? null];
             }
 
             $response->getBody()->write(json_encode($body, JSON_THROW_ON_ERROR));

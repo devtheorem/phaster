@@ -46,6 +46,11 @@ class MssqlDbTest extends DbTestCase
         return self::$db;
     }
 
+    protected function getIdentityColumnDefinition(): string
+    {
+        return 'INT PRIMARY KEY IDENTITY NOT NULL';
+    }
+
     private static function createTestTable(PeachySql $db): void
     {
         self::tearDownAfterClass();

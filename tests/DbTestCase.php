@@ -3,18 +3,23 @@
 namespace DevTheorem\Phaster\Test;
 
 use DevTheorem\PeachySQL\PeachySql;
-use DevTheorem\Phaster\Test\src\{LegacyUsers, ModernUsers, Users};
+use DevTheorem\Phaster\Test\src\{ConcurrentRows, LegacyUsers, ModernUsers, Users};
+use PDO;
 use PHPUnit\Framework\TestCase;
 
 abstract class DbTestCase extends TestCase
 {
     abstract public static function dbProvider(): PeachySql;
 
+    abstract public static function createConnection(): PDO;
+
+    abstract protected function getIdentityColumnDefinition(): string;
+
     public static function tearDownAfterClass(): void
     {
         $db = static::dbProvider();
 
-        foreach (['UserThings', 'Users'] as $table) {
+        foreach (['ConcurrentTest', 'UserThings', 'Users'] as $table) {
             $db->query("DROP TABLE IF EXISTS $table");
         }
     }
@@ -354,5 +359,79 @@ abstract class DbTestCase extends TestCase
         ];
 
         $this->assertSame($expected, $actual);
+    }
+
+    /**
+     * Adds entities from multiple processes at the same time, and verifies
+     * that each returned ID belongs to the row that was inserted by that process.
+     */
+    public function testConcurrentInsertIds(): void
+    {
+        $db = static::dbProvider();
+        $db->query('DROP TABLE IF EXISTS ConcurrentTest');
+        $db->query('CREATE TABLE ConcurrentTest (id ' . $this->getIdentityColumnDefinition()
+            . ', worker INT NOT NULL, batch INT NOT NULL, seq INT NOT NULL)');
+
+        $workers = 6;
+        $batches = 15;
+        $rowsPerBatch = 500;
+        $startTime = microtime(true) + 1.5; // allow time for all the processes to start
+        $processes = [];
+
+        for ($worker = 0; $worker < $workers; $worker++) {
+            $command = [
+                PHP_BINARY, __DIR__ . '/insert-worker.php', static::class,
+                (string) $worker, (string) $batches, (string) $rowsPerBatch, (string) $startTime,
+            ];
+
+            $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__));
+
+            if ($process === false) {
+                throw new \Exception('Failed to start insert worker');
+            }
+
+            $processes[$worker] = [$process, $pipes];
+        }
+
+        $expected = [];
+
+        foreach ($processes as $worker => [$process, $pipes]) {
+            $output = stream_get_contents($pipes[1]);
+            $errors = stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $this->assertSame(0, proc_close($process), "Insert worker {$worker} failed: {$output} {$errors}");
+
+            /** @var list<list<int>> $batchIds */
+            $batchIds = json_decode((string) $output, true, flags: JSON_THROW_ON_ERROR);
+            $this->assertCount($batches, $batchIds);
+
+            foreach ($batchIds as $batch => $ids) {
+                $this->assertCount($rowsPerBatch, $ids);
+
+                foreach ($ids as $seq => $id) {
+                    $expected[$id] = ['id' => $id, 'worker' => $worker, 'batch' => $batch, 'seq' => $seq];
+                }
+            }
+        }
+
+        $actual = (new ConcurrentRows($db))->getEntities();
+        $this->assertSame($workers * $batches * $rowsPerBatch, count($actual));
+        $this->assertSame(count($actual), count($expected), 'Duplicate IDs were returned');
+
+        // compare the rows individually, since diffing large arrays on failure is extremely slow
+        $mismatches = [];
+
+        foreach ($actual as $row) {
+            /** @var int $id */
+            $id = $row['id'];
+
+            if (($expected[$id] ?? null) !== $row) {
+                $mismatches[] = ['returned' => $expected[$id] ?? null, 'actual' => $row];
+            }
+        }
+
+        $message = count($mismatches) . ' returned IDs do not match the inserted row';
+        $this->assertSame([], array_slice($mismatches, 0, 3), $message);
     }
 }

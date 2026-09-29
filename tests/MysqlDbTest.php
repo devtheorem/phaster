@@ -12,21 +12,29 @@ class MysqlDbTest extends DbTestCase
 {
     private static ?PeachySql $db = null;
 
+    public static function createConnection(): PDO
+    {
+        $c = App::$config;
+
+        return new PDO($c->mysqlDsn, $c->mysqlUser, $c->mysqlPassword, [
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+    }
+
     public static function dbProvider(): PeachySql
     {
         if (!self::$db) {
-            $c = App::$config;
-
-            $pdo = new PDO($c->mysqlDsn, $c->mysqlUser, $c->mysqlPassword, [
-                PDO::ATTR_EMULATE_PREPARES => false,
-            ]);
-
-            self::$db = new PeachySql($pdo);
+            self::$db = new PeachySql(self::createConnection());
             self::createTestTable(self::$db);
             assert(self::$db !== null);
         }
 
         return self::$db;
+    }
+
+    protected function getIdentityColumnDefinition(): string
+    {
+        return 'INT PRIMARY KEY AUTO_INCREMENT NOT NULL';
     }
 
     private static function createTestTable(PeachySql $db): void

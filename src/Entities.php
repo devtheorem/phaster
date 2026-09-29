@@ -221,7 +221,8 @@ abstract class Entities
             }
         }
 
-        $ids = $this->db->insertRows($this->getTableName(), $rows, $this->getIdentityIncrement())->ids;
+        // returning IDs from the insert query ensures they're correct when other sessions insert concurrently
+        $ids = $this->db->insertRows($this->getTableName(), $rows, $this->getIdentityIncrement(), $this->idColumn)->ids;
         $this->afterInsert($ids, $rows); // $ids is parallel to $rows before existing IDs are merged in
 
         foreach ($existingIds as $offset => $id) {

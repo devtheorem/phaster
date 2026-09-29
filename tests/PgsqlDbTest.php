@@ -12,22 +12,30 @@ class PgsqlDbTest extends DbTestCase
 {
     private static ?PeachySql $db = null;
 
+    public static function createConnection(): PDO
+    {
+        $c = App::$config;
+        $dbName = getenv('POSTGRES_HOST') !== false ? 'postgres' : 'PeachySQL';
+
+        return new PDO($c->getPgsqlDsn($dbName), $c->pgsqlUser, $c->pgsqlPassword, [
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+    }
+
     public static function dbProvider(): PeachySql
     {
         if (!self::$db) {
-            $c = App::$config;
-            $dbName = getenv('POSTGRES_HOST') !== false ? 'postgres' : 'PeachySQL';
-
-            $pdo = new PDO($c->getPgsqlDsn($dbName), $c->pgsqlUser, $c->pgsqlPassword, [
-                PDO::ATTR_EMULATE_PREPARES => false,
-            ]);
-
-            self::$db = new PeachySql($pdo);
+            self::$db = new PeachySql(self::createConnection());
             self::createTestTable(self::$db);
             assert(self::$db !== null);
         }
 
         return self::$db;
+    }
+
+    protected function getIdentityColumnDefinition(): string
+    {
+        return 'SERIAL PRIMARY KEY';
     }
 
     private static function createTestTable(PeachySql $db): void
