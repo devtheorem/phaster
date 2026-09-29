@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0] - 2026-09-29
+
+### Fixed
+- With SQL Server and PostgreSQL, `addEntities()` now returns the IDs from the insert query itself,
+  so they are correct when other connections insert into the same table at the same time.
+- With SQL Server, `addEntities()` returned the wrong ID for a single entity when an insert trigger
+  inserted into another table with an identity column.
+- `patchByIds()` and `deleteByIds()` no longer fail when passed more IDs than the database allows
+  bound parameters for. The IDs are split into multiple queries, which are run in a transaction.
+- With SQL Server, the counts returned by `updateById()`, `patchByIds()`, and `deleteByIds()`
+  no longer include rows changed by triggers.
+
+### Changed
+- PeachySQL 7.1+ is now required, and SQL Server 2016+ when using SQL Server.
+- When `addEntities()` requires multiple insert queries, they're now run in a transaction,
+  so if one of them fails, none of the entities are inserted.
+- With SQL Server, bulk inserts into a view with an `INSTEAD OF INSERT` trigger now fail,
+  since the IDs of rows inserted by the trigger can't be returned. No ID is returned when
+  inserting a single entity into these views.
+- When inserting a single entity, the route handler returns a null ID if no ID is returned by `addEntities()`,
+  rather than the posted ID, which isn't inserted.
+
+
 ## [4.1.0] - 2026-07-15
 
 ### Added
@@ -238,6 +261,7 @@ return early if passed an empty IDs array.
 - Initial stable release
 
 
+[4.2.0]: https://github.com/devtheorem/phaster/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/devtheorem/phaster/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/devtheorem/phaster/compare/v3.0.0...v4.0.0
 [3.0.0]: https://github.com/devtheorem/phaster/compare/v2.9.0...v3.0.0
