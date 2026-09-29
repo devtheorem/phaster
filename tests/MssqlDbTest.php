@@ -12,20 +12,33 @@ class MssqlDbTest extends DbTestCase
 {
     private static ?PeachySql $db = null;
 
-    public static function dbProvider(): PeachySql
+    public static function createConnection(): PDO
     {
-        if (!self::$db) {
+        // set when running tests with GitHub Actions
+        $server = getenv('SQLCMDSERVER');
+        $username = getenv('SQLCMDUSER');
+        $password = getenv('SQLCMDPASSWORD');
+
+        if ($server === false || $username === false || $password === false) {
             $c = App::$config;
             $server = $c->mssqlServer;
             $username = $c->mssqlUsername;
             $password = $c->mssqlPassword;
+        }
 
-            $pdo = new PDO("sqlsrv:Server=$server;Database=PeachySQL", $username, $password, [
-                PDO::ATTR_EMULATE_PREPARES => false,
-                PDO::SQLSRV_ATTR_FETCHES_NUMERIC_TYPE => true,
-            ]);
+        // ODBC Driver 18 encrypts connections by default, and test servers generally use a self-signed certificate
+        $dsn = "sqlsrv:Server=$server;Database=PeachySQL;TrustServerCertificate=1";
 
-            self::$db = new PeachySql($pdo);
+        return new PDO($dsn, $username, $password, [
+            PDO::ATTR_EMULATE_PREPARES => false,
+            PDO::SQLSRV_ATTR_FETCHES_NUMERIC_TYPE => true,
+        ]);
+    }
+
+    public static function dbProvider(): PeachySql
+    {
+        if (!self::$db) {
+            self::$db = new PeachySql(self::createConnection());
             self::createTestTable(self::$db);
             assert(self::$db !== null);
         }
