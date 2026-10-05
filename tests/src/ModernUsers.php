@@ -7,7 +7,7 @@ use DevTheorem\Phaster\{Entities, Prop, QueryOptions};
 class ModernUsers extends Entities
 {
     /** @var array{ids: list<int>, rows: list<array<string, mixed>>}|null */
-    public ?array $afterInsertResult = null;
+    public ?array $inserted = null;
 
     protected function getTableName(): string
     {
@@ -54,21 +54,36 @@ class ModernUsers extends Entities
                 LEFT JOIN UserThings ut ON ut.user_id = u.user_id";
     }
 
+    public function addEntities(array $entities): array
+    {
+        $rows = [];
+        $existingIds = [];
+
+        foreach ($entities as $key => $entity) {
+            if (($entity['name'] ?? null) === 'Modern user 2') {
+                $existingIds[$key] = -42; // don't insert row for this item
+            } else {
+                $rows[] = $this->processEntity($entity, []);
+            }
+        }
+
+        $ids = $this->insertRows($rows);
+        $this->inserted = ['ids' => $ids, 'rows' => $rows];
+
+        foreach ($existingIds as $offset => $id) {
+            array_splice($ids, $offset, 0, [$id]);
+        }
+        return $ids;
+    }
+
     protected function processValues(array $data, array $ids): array
     {
         if (count($ids) === 0) {
             if ($data['name'] === 'Modern user 3') {
                 $data['name'] = 'Modern user 3 modified';
-            } elseif ($data['name'] === 'Modern user 2') {
-                $data['id'] = -42; // don't insert row for this item
             }
         }
 
         return $data;
-    }
-
-    protected function afterInsert(array $ids, array $rows): void
-    {
-        $this->afterInsertResult = ['ids' => $ids, 'rows' => $rows];
     }
 }

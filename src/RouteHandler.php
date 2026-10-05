@@ -203,7 +203,7 @@ class RouteHandler
                 throw new HttpException('Missing expected id argument');
             }
 
-            $affected = $instance->updateById($args['id'], $body);
+            $affected = $instance->updateEntities([$args['id']], $body);
             $response->getBody()->write(json_encode(['affected' => $affected], JSON_THROW_ON_ERROR));
             return $response->withHeader('Content-Type', 'application/json');
         };
@@ -228,7 +228,7 @@ class RouteHandler
                 throw new HttpException('Missing expected id argument');
             }
 
-            $affected = $instance->patchByIds(explode(',', $args['id']), $body);
+            $affected = $instance->updateEntities(explode(',', $args['id']), $body, partial: true);
             $response->getBody()->write(json_encode(['affected' => $affected], JSON_THROW_ON_ERROR));
             return $response->withHeader('Content-Type', 'application/json');
         };

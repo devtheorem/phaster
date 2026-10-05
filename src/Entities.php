@@ -142,14 +142,6 @@ abstract class Entities
     }
 
     /**
-     * Runs after rows are inserted, before their IDs are returned.
-     * The arrays are parallel: $ids[$i] is the generated ID of $rows[$i].
-     * @param list<int> $ids
-     * @param list<array<string, mixed>> $rows the inserted column/value rows
-     */
-    protected function afterInsert(array $ids, array $rows): void {}
-
-    /**
      * @param list<string|int> $ids
      */
     public function deleteByIds(array $ids): int
@@ -162,32 +154,19 @@ abstract class Entities
     }
 
     /**
+     * Replace one or more rows, or update them via a JSON Merge Patch (https://tools.ietf.org/html/rfc7396) if $partial is true
+     * @param list<string|int> $ids
      * @param mixed[] $data
      */
-    public function updateById(int|string $id, array $data): int
-    {
-        $row = Helpers::allPropertiesToColumns($this->map, $this->processValues($data, [$id]));
-        $row = $this->processRow($row, [$id]);
-
-        return $this->db->updateRows($this->getTableName(), $row, [$this->idColumn => $id]);
-    }
-
-    /**
-     * Update one or more rows via a JSON Merge Patch (https://tools.ietf.org/html/rfc7396)
-     * @param list<string|int> $ids
-     * @param mixed[] $mergePatch
-     */
-    public function patchByIds(array $ids, array $mergePatch): int
+    public function updateEntities(array $ids, array $data, bool $partial = false): int
     {
         if (count($ids) === 0) {
             return 0;
         }
 
-        $data = $this->processValues($mergePatch, $ids);
-        $colVals = self::propertiesToColumns($this->map, $data, complexValues: false);
-        $colVals = $this->processRow($colVals, $ids);
+        $row = $this->processEntity($data, $ids, $partial);
 
-        return $this->db->updateRows($this->getTableName(), $colVals, [$this->idColumn => $ids]);
+        return $this->db->updateRows($this->getTableName(), $row, [$this->idColumn => $ids]);
     }
 
     /**
@@ -197,39 +176,38 @@ abstract class Entities
      */
     public function addEntities(array $entities): array
     {
-        if (count($entities) === 0) {
+        return $this->insertRows(array_map(fn($e) => $this->processEntity($e, []), $entities));
+    }
+
+    /**
+     * Runs processValues(), converts the properties to a column/value row, then runs processRow().
+     * All mapped properties are required unless $partial is true.
+     * @param mixed[] $data
+     * @param list<string|int> $ids
+     * @return array<string, mixed>
+     */
+    final protected function processEntity(array $data, array $ids, bool $partial = false): array
+    {
+        $data = $this->processValues($data, $ids);
+        $row = $partial
+            ? self::propertiesToColumns($this->map, $data, complexValues: false)
+            : Helpers::allPropertiesToColumns($this->map, $data);
+
+        return $this->processRow($row, $ids);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<int> the IDs of the inserted rows
+     */
+    final protected function insertRows(array $rows): array
+    {
+        if (count($rows) === 0) {
             return [];
         }
 
-        $rows = [];
-        $existingIds = [];
-
-        foreach ($entities as $key => $entity) {
-            unset($entity[$this->idField]); // any ID posted to API should be ignored
-            $entity = $this->processValues($entity, []);
-
-            // if processValues sets an ID for an existing item, don't insert a new row for it
-            if (isset($entity[$this->idField])) {
-                $id = $entity[$this->idField];
-                if (!is_int($id)) {
-                    throw new \Exception('ID value set by processValues must be an integer');
-                }
-                $existingIds[$key] = $id;
-            } else {
-                $row = Helpers::allPropertiesToColumns($this->map, $entity);
-                $rows[] = $this->processRow($row, []);
-            }
-        }
-
         // returning IDs from the insert query ensures they're correct when other sessions insert concurrently
-        $ids = $this->db->insertRows($this->getTableName(), $rows, $this->getIdentityIncrement(), $this->idColumn)->ids;
-        $this->afterInsert($ids, $rows); // $ids is parallel to $rows before existing IDs are merged in
-
-        foreach ($existingIds as $offset => $id) {
-            array_splice($ids, $offset, 0, [$id]);
-        }
-
-        return $ids;
+        return $this->db->insertRows($this->getTableName(), $rows, $this->getIdentityIncrement(), $this->idColumn)->ids;
     }
 
     /**

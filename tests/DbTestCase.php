@@ -77,14 +77,15 @@ abstract class DbTestCase extends TestCase
         $this->assertSame($expected, $entities->getEntitiesByIds($ids));
     }
 
-    public function testUpdateById(): void
+    public function testUpdateEntities(): void
     {
         $db = static::dbProvider();
         $entities = new Users($db);
+        $weight = fn(float $w) => $db->options->floatSelectedAsString ? (string) $w : $w;
 
         try {
             // optional properties should still be required when replacing an entity
-            $entities->updateById(0, [
+            $entities->updateEntities([0], [
                 'name' => 'My Name',
                 'birthday' => '2017-03-05',
                 'weight' => 130.0,
@@ -95,73 +96,27 @@ abstract class DbTestCase extends TestCase
             $this->assertSame('Missing required isDisabled property', $e->getMessage());
         }
 
-        $user = [
-            'name' => 'Wrong Name',
-            'birthday' => '2015-04-06',
-            'weight' => 250.0,
-            'isDisabled' => true,
-        ];
-
-        $id = $entities->addEntities([$user])[0];
-
-        $newUser = [
-            'id' => $id,
-            'name' => 'Right Name',
-            'birthday' => '2016-05-07',
-            'weight' => 215.0,
-            'isDisabled' => false,
-        ];
-
-        if ($db->options->floatSelectedAsString) {
-            $newUser['weight'] = (string) $newUser['weight'];
-        }
-
-        $entities->updateById($id, $newUser);
-        $this->assertSame($newUser, $entities->getEntityById($id));
-    }
-
-    public function testPatchByIds(): void
-    {
-        $db = static::dbProvider();
-        $entities = new Users($db);
-
-        $users = [
-            [
-                'name' => 'Canada 🪿',
-                'birthday' => '2024-10-21',
-                'weight' => 10.55,
-            ],
-            [
-                'name' => 'Rutt 🫎',
-                'birthday' => '2015-02-03',
-                'weight' => 1500.0,
-            ],
-        ];
-
-        $ids = $entities->addEntities($users);
-
-        $expected = array_map(function ($u, $i) use ($db) {
-            return array_merge(['id' => $i], $u, [
-                'weight' => $db->options->floatSelectedAsString ? (string) $u['weight'] : $u['weight'],
-                'isDisabled' => false,
-            ]);
-        }, $users, $ids);
-
-        $this->assertSame($expected, $entities->getEntitiesByIds($ids));
-
-        $entities->patchByIds($ids, [
-            'weight' => 125.0,
+        $ids = $entities->addEntities([
+            ['name' => 'Canada 🪿', 'birthday' => '2024-10-21', 'weight' => 10.55],
+            ['name' => 'Rutt 🫎', 'birthday' => '2015-02-03', 'weight' => 1500.0],
         ]);
 
-        $newExpected = array_map(function ($u) use ($db) {
-            return array_merge($u, [
-                'weight' => $db->options->floatSelectedAsString ? '125' : 125.0,
-            ]);
-        }, $expected);
+        // replacing one entity shouldn't affect the other
+        $replacement = ['name' => 'Right Name', 'birthday' => '2016-05-07', 'weight' => 215.0, 'isDisabled' => true];
+        $this->assertSame(1, $entities->updateEntities([$ids[0]], $replacement));
 
-        $this->assertSame($newExpected, $entities->getEntitiesByIds($ids));
+        $expected = [
+            ['id' => $ids[0], ...$replacement, 'weight' => $weight(215.0)],
+            ['id' => $ids[1], 'name' => 'Rutt 🫎', 'birthday' => '2015-02-03', 'weight' => $weight(1500.0), 'isDisabled' => false],
+        ];
+        $this->assertSame($expected, $entities->getEntitiesByIds($ids));
 
-        $entities->deleteByIds($ids);
+        // a partial update should only change the specified properties
+        $this->assertSame(2, $entities->updateEntities($ids, ['weight' => 125.0], partial: true));
+        $expected = array_map(fn($u) => [...$u, 'weight' => $weight(125.0)], $expected);
+        $this->assertSame($expected, $entities->getEntitiesByIds($ids));
+
+        $this->assertSame(2, $entities->deleteByIds($ids));
         $this->assertSame([], $entities->getEntitiesByIds($ids));
     }
 
@@ -170,7 +125,8 @@ abstract class DbTestCase extends TestCase
         $entities = static::entitiesProvider();
         $ids = $entities->addEntities([]);
         $this->assertSame([], $entities->getEntitiesByIds($ids));
-        $this->assertSame(0, $entities->patchByIds($ids, ['weight' => 10]));
+        $this->assertSame(0, $entities->updateEntities($ids, ['weight' => 10], partial: true));
+        $this->assertSame(0, $entities->updateEntities($ids, ['weight' => 10]));
         $this->assertSame(0, $entities->deleteByIds($ids));
     }
 
@@ -323,17 +279,16 @@ abstract class DbTestCase extends TestCase
         }
 
         $ids = $entities->addEntities($users);
-        $this->assertSame(-42, $ids[1]); // manually set ID in processValues
+        $this->assertSame(-42, $ids[1]); // existing ID set in addEntities
 
-        // afterInsert receives only the inserted rows, with IDs parallel to them (excluding the
-        // manually set existing ID at index 1)
+        // the processed rows are parallel to the inserted IDs (which exclude the existing ID at index 1)
         $insertedIds = $ids;
         array_splice($insertedIds, 1, 1);
-        $this->assertNotNull($entities->afterInsertResult);
-        $this->assertSame($insertedIds, $entities->afterInsertResult['ids']);
-        $this->assertCount(9, $entities->afterInsertResult['rows']);
-        $this->assertSame('Modern user 1', $entities->afterInsertResult['rows'][0]['name']);
-        $this->assertSame('Modern user 3 modified', $entities->afterInsertResult['rows'][1]['name']);
+        $this->assertNotNull($entities->inserted);
+        $this->assertSame($insertedIds, $entities->inserted['ids']);
+        $this->assertCount(9, $entities->inserted['rows']);
+        $this->assertSame('Modern user 1', $entities->inserted['rows'][0]['name']);
+        $this->assertSame('Modern user 3 modified', $entities->inserted['rows'][1]['name']);
 
         $db->insertRow('UserThings', ['user_id' => $ids[3]]);
 

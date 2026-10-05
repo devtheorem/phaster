@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `updateEntities()` method which replaces one or more rows, or updates them via a JSON Merge Patch
+  when `$partial` is true.
+- Protected `processEntity()` and `insertRows()` methods, so an overridden `addEntities()` can access
+  the processed rows without calling `processValues()` twice. `processEntity()` runs `processValues()`,
+  converts the properties to a column/value row, then runs `processRow()`. `insertRows()` inserts
+  the rows and returns their IDs.
+
+### Changed
+- `addEntities()` no longer ignores an `id` property in the posted entities. If `getMap()` includes
+  the ID property, the posted value is now inserted.
+
+### Removed
+- `afterInsert()` hook.
+- `updateById()` and `patchByIds()` methods. Use `updateEntities()` instead.
+- Support for setting the ID of an existing row in `processValues()` to skip inserting it.
+  The ID is now treated like any other property, so a new row is inserted.
+
+
 ## [4.2.0] - 2026-09-29
 
 ### Fixed
