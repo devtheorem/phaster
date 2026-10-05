@@ -63,7 +63,7 @@ class ModernUsers extends Entities
             if (($entity['name'] ?? null) === 'Modern user 2') {
                 $existingIds[$key] = -42; // don't insert row for this item
             } else {
-                $rows[] = $this->processEntity($entity, []);
+                $rows[] = $this->processEntity($entity);
             }
         }
 

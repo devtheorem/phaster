@@ -342,4 +342,36 @@ class HelpersTest extends TestCase
 
         $this->assertSame($expected, Helpers::allPropertiesToColumns($map, $valid));
     }
+
+    public function testGetMappedValues(): void
+    {
+        $properties = [
+            'extra' => 'unmapped properties are excluded',
+            'name' => 'Test Name',
+            'client' => ['name' => 'Client Name', 'id' => 123, 'extra' => true],
+            'group' => null, // null groups are expanded to null properties
+        ];
+
+        $expected = [
+            'name' => 'Test Name',
+            'client' => [
+                'id' => 123,
+                'name' => 'Client Name',
+                'isDisabled' => null,
+            ],
+            'group' => [
+                'type' => [
+                    'id' => null,
+                    'name' => null,
+                ],
+            ],
+        ];
+
+        $this->assertSame($expected, Helpers::getMappedValues($this->propertyMap, $properties));
+
+        // missing properties are omitted rather than set to null when $fillMissing is false
+        $properties = ['extra' => true, 'name' => 'Test Name', 'client' => ['id' => 123]];
+        $expected = ['name' => 'Test Name', 'client' => ['id' => 123]];
+        $this->assertSame($expected, Helpers::getMappedValues($this->propertyMap, $properties, fillMissing: false));
+    }
 }

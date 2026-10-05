@@ -279,6 +279,35 @@ class Helpers
     }
 
     /**
+     * Returns the values of the properties in the map, in the same nested structure.
+     * Properties without a value are set to null, or omitted if $fillMissing is false.
+     * @param array<string, mixed> $map
+     * @param mixed[] $properties
+     * @return array<string, mixed>
+     */
+    public static function getMappedValues(array $map, array $properties, bool $fillMissing = true): array
+    {
+        $values = [];
+
+        foreach ($map as $property => $val) {
+            if (!$fillMissing && !array_key_exists($property, $properties)) {
+                continue;
+            }
+
+            $value = $properties[$property] ?? null;
+
+            if (is_array($val)) {
+                /** @var array<string, mixed> $val */
+                $values[$property] = self::getMappedValues($val, is_array($value) ? $value : [], $fillMissing);
+            } else {
+                $values[$property] = $value;
+            }
+        }
+
+        return $values;
+    }
+
+    /**
      * @param mixed[] $map
      * @param mixed[] $properties
      * @param array<string, mixed> $columns

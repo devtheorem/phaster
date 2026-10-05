@@ -11,8 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when `$partial` is true.
 - Protected `processEntity()` and `insertRows()` methods, so an overridden `addEntities()` can access
   the processed rows without calling `processValues()` twice. `processEntity()` runs `processValues()`,
-  converts the properties to a column/value row, then runs `processRow()`. `insertRows()` inserts
-  the rows and returns their IDs.
+  converts the properties to a column/value row, runs `validateEntity()`, then runs `processRow()`.
+  `insertRows()` inserts the rows and returns their IDs.
+- `validateEntity()` hook for validating the complete set of writable properties that will be saved.
+  When updating, it is called for each row with the patch merged into the existing entity, along with
+  the existing entity, and both include the ID property. The existing entity also contains the default
+  fields returned by `getEntityById()`, such as computed properties. Writable properties which aren't
+  selectable aren't in the existing entity, and are only in the merged entity if the patch sets them.
+  If implemented, `updateEntities()` only updates rows that can be selected.
 
 ### Changed
 - `addEntities()` no longer ignores an `id` property in the posted entities. If `getMap()` includes

@@ -15,6 +15,11 @@ abstract class Entities
     private array $fullPropMap;
     /** @var array<string, mixed> */
     private array $map;
+    private bool $validatesEntities;
+    /** @var array<string, mixed> */
+    private array $selectableMap = [];
+    /** @var list<string> */
+    private array $existingFields = [];
 
     public function __construct(PeachySql $db)
     {
@@ -38,6 +43,18 @@ abstract class Entities
         $this->idColumn = $idParts[array_key_last($idParts)];
         $this->fullPropMap = $propMap;
         $this->map = $this->getMap();
+        $this->validatesEntities = (new \ReflectionMethod($this, 'validateEntity'))->class !== self::class;
+
+        if ($this->validatesEntities) {
+            // writable properties which aren't selectable won't be in the existing entities
+            $writableProps = array_intersect_key(Helpers::selectMapToPropMap($this->map), $propMap);
+            $this->selectableMap = Helpers::propMapToSelectMap($writableProps);
+
+            // select the default fields, along with any writable fields that aren't selected by default
+            $defaultFields = array_keys(array_filter($propMap, fn(Prop $p) => $p->isDefault));
+            $writableFields = array_keys($writableProps);
+            $this->existingFields = array_values(array_unique([$this->idField, ...$defaultFields, ...$writableFields]));
+        }
     }
 
     /**
@@ -142,6 +159,23 @@ abstract class Entities
     }
 
     /**
+     * Validate an entity before it is inserted or updated, by throwing an HttpException if it is invalid.
+     * $entity contains every writable property in getMap(), with the values that will be saved after
+     * processValues() runs. For partial updates, it is the existing entity with the patch merged in.
+     * When updating, this is called for each row, and both arrays also contain the row's ID property.
+     * $existing contains the existing values of the default fields (as returned by getEntityById())
+     * and the writable properties, so it can have properties which aren't in $entity, such as
+     * computed properties. $existing is null when inserting.
+     * Writable properties which aren't selectable (e.g. a password) aren't in $existing, and are only
+     * in $entity for partial updates if the patch sets them.
+     * Since the existing entities are selected before the update query runs, rules which must hold
+     * when rows are updated concurrently should also be enforced by database constraints.
+     * @param array<string, mixed> $entity
+     * @param array<string, mixed>|null $existing
+     */
+    protected function validateEntity(array $entity, ?array $existing): void {}
+
+    /**
      * @param list<string|int> $ids
      */
     public function deleteByIds(array $ids): int
@@ -154,7 +188,9 @@ abstract class Entities
     }
 
     /**
-     * Replace one or more rows, or update them via a JSON Merge Patch (https://tools.ietf.org/html/rfc7396) if $partial is true
+     * Replace one or more rows, or update them via a JSON Merge Patch (https://tools.ietf.org/html/rfc7396) if $partial is true.
+     * All mapped properties are required unless $partial is true.
+     * If validateEntity() is implemented, only rows which can be selected are validated and updated.
      * @param list<string|int> $ids
      * @param mixed[] $data
      */
@@ -164,9 +200,53 @@ abstract class Entities
             return 0;
         }
 
-        $row = $this->processEntity($data, $ids, $partial);
+        $data = $this->processValues($data, $ids);
+        $row = $partial
+            ? self::propertiesToColumns($this->map, $data, complexValues: false)
+            : Helpers::allPropertiesToColumns($this->map, $data);
+
+        if ($this->validatesEntities) {
+            $ids = $this->validateUpdates($ids, $data, $partial);
+
+            if (count($ids) === 0) {
+                return 0;
+            }
+        }
+
+        $row = $this->processRow($row, $ids);
 
         return $this->db->updateRows($this->getTableName(), $row, [$this->idColumn => $ids]);
+    }
+
+    /**
+     * Calls validateEntity() for each existing row, and returns the IDs of the rows that were validated.
+     * @param list<string|int> $ids
+     * @param mixed[] $data
+     * @return list<string|int>
+     */
+    private function validateUpdates(array $ids, array $data, bool $partial): array
+    {
+        $validatedIds = [];
+
+        // select in batches, so the IDs don't exceed the database's bound parameter limit
+        foreach (array_chunk(array_values(array_unique($ids)), 1000) as $batch) {
+            foreach ($this->getEntitiesByIds($batch, $this->existingFields) as $entity) {
+                /** @var int|string $id */
+                $id = $entity[$this->idField];
+                $writable = Helpers::getMappedValues($this->selectableMap, $entity);
+                // writable properties in a null group are set to null rather than removing the group
+                /** @var array<string, mixed> $existing */
+                $existing = array_replace_recursive($entity, $writable);
+                $updated = $partial ? array_replace_recursive($writable, $data) : $data;
+                // writable properties which aren't selectable are only included if they're being set,
+                // and the ID is first, but a mapped ID property overrides its value
+                $updated = [$this->idField => $id, ...Helpers::getMappedValues($this->map, $updated, fillMissing: false)];
+                $this->validateEntity($updated, $existing);
+                $validatedIds[] = $id;
+            }
+        }
+
+        return $validatedIds;
     }
 
     /**
@@ -176,24 +256,25 @@ abstract class Entities
      */
     public function addEntities(array $entities): array
     {
-        return $this->insertRows(array_map(fn($e) => $this->processEntity($e, []), $entities));
+        return $this->insertRows(array_map(fn($e) => $this->processEntity($e), $entities));
     }
 
     /**
-     * Runs processValues(), converts the properties to a column/value row, then runs processRow().
-     * All mapped properties are required unless $partial is true.
+     * Runs processValues(), converts the properties to a column/value row, runs validateEntity(),
+     * then runs processRow() to return the row to insert. All mapped properties are required.
      * @param mixed[] $data
-     * @param list<string|int> $ids
      * @return array<string, mixed>
      */
-    final protected function processEntity(array $data, array $ids, bool $partial = false): array
+    final protected function processEntity(array $data): array
     {
-        $data = $this->processValues($data, $ids);
-        $row = $partial
-            ? self::propertiesToColumns($this->map, $data, complexValues: false)
-            : Helpers::allPropertiesToColumns($this->map, $data);
+        $data = $this->processValues($data, []);
+        $row = Helpers::allPropertiesToColumns($this->map, $data);
 
-        return $this->processRow($row, $ids);
+        if ($this->validatesEntities) {
+            $this->validateEntity(Helpers::getMappedValues($this->map, $data), null);
+        }
+
+        return $this->processRow($row, []);
     }
 
     /**

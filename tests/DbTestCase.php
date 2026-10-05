@@ -3,9 +3,10 @@
 namespace DevTheorem\Phaster\Test;
 
 use DevTheorem\PeachySQL\PeachySql;
-use DevTheorem\Phaster\Test\src\{ConcurrentRows, LegacyUsers, ModernUsers, Users};
+use DevTheorem\Phaster\Test\src\{ConcurrentRows, LegacyUsers, ModernUsers, Users, ValidatedUsers};
 use PDO;
 use PHPUnit\Framework\TestCase;
+use Teapot\HttpException;
 
 abstract class DbTestCase extends TestCase
 {
@@ -118,6 +119,96 @@ abstract class DbTestCase extends TestCase
 
         $this->assertSame(2, $entities->deleteByIds($ids));
         $this->assertSame([], $entities->getEntitiesByIds($ids));
+    }
+
+    public function testValidateEntity(): void
+    {
+        $db = static::dbProvider();
+        $entities = new ValidatedUsers($db);
+        $weight = fn(float $w) => $db->options->floatSelectedAsString ? (string) $w : $w;
+
+        try {
+            $entities->addEntities([
+                ['name' => 'Validated 1', 'birthday' => '2019-01-02', 'weight' => 20.0],
+                ['name' => 'Validated 2', 'birthday' => '2018-03-04', 'weight' => 0.0],
+            ]);
+
+            throw new \Exception('Failed to throw validation exception');
+        } catch (HttpException $e) {
+            $this->assertSame('Weight must be positive', $e->getMessage());
+        }
+
+        // no rows are inserted if any entity is invalid
+        $this->assertSame(0, $entities->countEntities(['name' => ['lk' => 'Validated %']]));
+
+        // inserted entities are validated after processValues() sets defaults, without unmapped properties
+        $entities->validated = [];
+        $ids = $entities->addEntities([
+            ['name' => 'Validated 1', 'birthday' => '2019-01-02', 'weight' => 20.0, 'extra' => 1],
+            ['name' => 'Validated 2', 'birthday' => '2018-03-04', 'weight' => 30.0, 'isDisabled' => true],
+        ]);
+
+        $expected = [
+            ['entity' => ['name' => 'Validated 1', 'birthday' => '2019-01-02', 'weight' => 20.0, 'isDisabled' => false], 'existing' => null],
+            ['entity' => ['name' => 'Validated 2', 'birthday' => '2018-03-04', 'weight' => 30.0, 'isDisabled' => true], 'existing' => null],
+        ];
+        $this->assertSame($expected, $entities->validated);
+
+        // a partial update validates each existing row with the patch merged in, and skips missing rows
+        $entities->validated = [];
+        $this->assertSame(2, $entities->updateEntities([(string) $ids[0], $ids[1], 0], ['weight' => 25.0], partial: true));
+
+        // the existing entities also include default computed fields, but not non-default fields or the
+        // unselectable birthday, which is only in the updated entities if the patch sets it
+        $writable1 = ['id' => $ids[0], 'name' => 'Validated 1', 'weight' => $weight(20.0), 'isDisabled' => false];
+        $writable2 = ['id' => $ids[1], 'name' => 'Validated 2', 'weight' => $weight(30.0), 'isDisabled' => true];
+        $existing1 = [...$writable1, 'isHeavy' => false];
+        $existing2 = [...$writable2, 'isHeavy' => false];
+        $expected = [
+            ['entity' => [...$writable1, 'weight' => 25.0], 'existing' => $existing1],
+            ['entity' => [...$writable2, 'weight' => 25.0], 'existing' => $existing2],
+        ];
+        $this->assertSame($expected, $entities->validated);
+
+        $entities->validated = [];
+        $this->assertSame(1, $entities->updateEntities([$ids[1]], ['birthday' => '2018-03-05'], partial: true));
+        $updated2 = ['id' => $ids[1], 'name' => 'Validated 2', 'birthday' => '2018-03-05', 'weight' => $weight(25.0), 'isDisabled' => true];
+        $expected = [['entity' => $updated2, 'existing' => [...$existing2, 'weight' => $weight(25.0)]]];
+        $this->assertSame($expected, $entities->validated);
+
+        try {
+            $entities->updateEntities($ids, ['name' => 'Renamed'], partial: true);
+            throw new \Exception('Failed to throw validation exception');
+        } catch (HttpException $e) {
+            $this->assertSame('Disabled users cannot be renamed', $e->getMessage());
+        }
+
+        // neither row is updated if any is invalid
+        $names = array_column($entities->getEntitiesByIds($ids, ['name']), 'name');
+        $this->assertSame(['Validated 1', 'Validated 2'], $names);
+
+        // a replacement is validated along with the existing entity, and an unmapped posted ID is ignored
+        $entities->validated = [];
+        $replacement = ['name' => 'Validated 3', 'birthday' => '2017-05-06', 'weight' => 40.0, 'isDisabled' => true];
+        $this->assertSame(1, $entities->updateEntities([$ids[0]], ['id' => -1, ...$replacement]));
+        $expected = [['entity' => ['id' => $ids[0], ...$replacement], 'existing' => [...$existing1, 'weight' => $weight(25.0)]]];
+        $this->assertSame($expected, $entities->validated);
+
+        $entities->validated = [];
+        $this->assertSame(0, $entities->updateEntities([0], ['weight' => 10.0], partial: true));
+        $this->assertSame([], $entities->validated);
+
+        // computed fields in the existing entity reflect the values before the update
+        $this->assertSame(1, $entities->updateEntities([$ids[0]], ['weight' => 150.0, 'isDisabled' => false], partial: true));
+
+        try {
+            $entities->updateEntities([$ids[0]], ['isDisabled' => true], partial: true);
+            throw new \Exception('Failed to throw validation exception');
+        } catch (HttpException $e) {
+            $this->assertSame('Heavy users cannot be disabled', $e->getMessage());
+        }
+
+        $this->assertSame(2, $entities->deleteByIds($ids));
     }
 
     public function testEmptyQueries(): void

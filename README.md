@@ -102,6 +102,25 @@ protected function getBaseSelect(QueryOptions $options): SqlParams
 // ...
 ```
 
+To validate entities before they are inserted or updated, implement `validateEntity()`. `$entity` contains
+every property from `getMap()` with the values that will be saved. For partial updates, this is the existing
+entity with the patch merged in. When updating, `$entity` and `$existing` also contain the ID property,
+and `$existing` contains the default fields returned by `getEntityById()`, such as computed properties.
+`$existing` is null when inserting. Writable properties which aren't selectable (such as a password) aren't
+in `$existing`, and are only in `$entity` for partial updates if the patch sets them.
+
+```php
+use Teapot\{HttpException, StatusCode};
+// ...
+protected function validateEntity(array $entity, ?array $existing): void
+{
+    if ($existing !== null && $existing['isDisabled'] && $entity['username'] !== $existing['username']) {
+        throw new HttpException('Disabled users cannot be renamed', StatusCode::BAD_REQUEST);
+    }
+}
+// ...
+```
+
 ```php
 <?php
 
