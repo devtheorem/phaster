@@ -15,17 +15,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `insertRows()` inserts the rows and returns their IDs.
 - `validateEntity()` hook for validating the complete set of writable properties that will be saved.
   When updating, it is called for each row with the patch merged into the existing entity, along with
-  the existing entity, and both include the ID property. The existing entity also contains the default
-  fields returned by `getEntityById()`, such as computed properties. Writable properties which aren't
+  the existing entity, and both include the ID property. The existing entity also contains the fields
+  returned by `getEntityById()`, such as computed properties. Writable properties which aren't
   selectable aren't in the existing entity, and are only in the merged entity if the patch sets them.
-  If implemented, `updateEntities()` only updates rows that can be selected.
+  If implemented, the ID property must be output, and `updateEntities()` only updates rows that can
+  be selected.
 
 ### Changed
 - `addEntities()` no longer ignores an `id` property in the posted entities. If `getMap()` includes
   the ID property, the posted value is now inserted.
+- `Prop` properties with `output: false` are no longer selected unless another selected property
+  depends on them, and requesting one in `$fields` now throws a "not a valid field" exception.
+  They can still be used for filtering and sorting. Setting `output: false` on a writable property
+  (one in `getMap()`) now throws an exception.
 
 ### Removed
 - `afterInsert()` hook.
+- `isDefault` `Prop` option. All output properties are now selected unless a subset of fields is
+  requested, and properties which shouldn't be output can set `output: false` instead. Since this
+  changes the position of the following parameters, any `Prop` arguments after `nullGroup` must now
+  be passed by name.
 - `updateById()` and `patchByIds()` methods. Use `updateEntities()` instead.
 - Support for setting the ID of an existing row in `processValues()` to skip inserting it.
   The ID is now treated like any other property, so a new row is inserted.

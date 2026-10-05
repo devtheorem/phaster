@@ -3,6 +3,7 @@
 namespace DevTheorem\Phaster\Test;
 
 use DevTheorem\PeachySQL\PeachySql;
+use DevTheorem\Phaster\Prop;
 use DevTheorem\Phaster\Test\src\{ConcurrentRows, LegacyUsers, ModernUsers, Users, ValidatedUsers};
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -158,8 +159,8 @@ abstract class DbTestCase extends TestCase
         $entities->validated = [];
         $this->assertSame(2, $entities->updateEntities([(string) $ids[0], $ids[1], 0], ['weight' => 25.0], partial: true));
 
-        // the existing entities also include default computed fields, but not non-default fields or the
-        // unselectable birthday, which is only in the updated entities if the patch sets it
+        // the existing entities also include computed fields, but not the unselectable birthday,
+        // which is only in the updated entities if the patch sets it
         $writable1 = ['id' => $ids[0], 'name' => 'Validated 1', 'weight' => $weight(20.0), 'isDisabled' => false];
         $writable2 = ['id' => $ids[1], 'name' => 'Validated 2', 'weight' => $weight(30.0), 'isDisabled' => true];
         $existing1 = [...$writable1, 'isHeavy' => false];
@@ -206,6 +207,33 @@ abstract class DbTestCase extends TestCase
             throw new \Exception('Failed to throw validation exception');
         } catch (HttpException $e) {
             $this->assertSame('Heavy users cannot be disabled', $e->getMessage());
+        }
+
+        try {
+            new class ($db) extends ValidatedUsers {
+                protected function getSelectProps(): array
+                {
+                    return [...parent::getSelectProps(), new Prop('id', 'user_id', output: false)];
+                }
+            };
+
+            throw new \Exception('Failed to throw exception for ID which is not output');
+        } catch (\Exception $e) {
+            $this->assertSame('id property must be output to validate entities', $e->getMessage());
+        }
+
+        try {
+            // writable properties can't be hidden, even without validation
+            new class ($db) extends Users {
+                protected function getSelectProps(): array
+                {
+                    return [...parent::getSelectProps(), new Prop('weight', 'weight', output: false)];
+                }
+            };
+
+            throw new \Exception('Failed to throw exception for writable property which is not output');
+        } catch (\Exception $e) {
+            $this->assertSame('Writable weight property cannot have output: false', $e->getMessage());
         }
 
         $this->assertSame(2, $entities->deleteByIds($ids));

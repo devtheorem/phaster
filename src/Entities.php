@@ -18,8 +18,6 @@ abstract class Entities
     private bool $validatesEntities;
     /** @var array<string, mixed> */
     private array $selectableMap = [];
-    /** @var list<string> */
-    private array $existingFields = [];
 
     public function __construct(PeachySql $db)
     {
@@ -43,17 +41,24 @@ abstract class Entities
         $this->idColumn = $idParts[array_key_last($idParts)];
         $this->fullPropMap = $propMap;
         $this->map = $this->getMap();
+        $writableProps = Helpers::selectMapToPropMap($this->map);
+
+        foreach (array_keys($writableProps) as $field) {
+            if (isset($propMap[$field]) && !$propMap[$field]->output) {
+                throw new \Exception("Writable {$field} property cannot have output: false");
+            }
+        }
+
         $this->validatesEntities = (new \ReflectionMethod($this, 'validateEntity'))->class !== self::class;
 
         if ($this->validatesEntities) {
-            // writable properties which aren't selectable won't be in the existing entities
-            $writableProps = array_intersect_key(Helpers::selectMapToPropMap($this->map), $propMap);
-            $this->selectableMap = Helpers::propMapToSelectMap($writableProps);
+            // the existing entities are selected when updating, so the ID must be output
+            if (!$propMap[$this->idField]->output) {
+                throw new \Exception("{$this->idField} property must be output to validate entities");
+            }
 
-            // select the default fields, along with any writable fields that aren't selected by default
-            $defaultFields = array_keys(array_filter($propMap, fn(Prop $p) => $p->isDefault));
-            $writableFields = array_keys($writableProps);
-            $this->existingFields = array_values(array_unique([$this->idField, ...$defaultFields, ...$writableFields]));
+            // writable properties which aren't selectable won't be in the existing entities
+            $this->selectableMap = Helpers::propMapToSelectMap(array_intersect_key($writableProps, $propMap));
         }
     }
 
@@ -163,9 +168,8 @@ abstract class Entities
      * $entity contains every writable property in getMap(), with the values that will be saved after
      * processValues() runs. For partial updates, it is the existing entity with the patch merged in.
      * When updating, this is called for each row, and both arrays also contain the row's ID property.
-     * $existing contains the existing values of the default fields (as returned by getEntityById())
-     * and the writable properties, so it can have properties which aren't in $entity, such as
-     * computed properties. $existing is null when inserting.
+     * $existing contains the existing values of the fields returned by getEntityById(), so it can have
+     * properties which aren't in $entity, such as computed properties. $existing is null when inserting.
      * Writable properties which aren't selectable (e.g. a password) aren't in $existing, and are only
      * in $entity for partial updates if the patch sets them.
      * Since the existing entities are selected before the update query runs, rules which must hold
@@ -230,7 +234,7 @@ abstract class Entities
 
         // select in batches, so the IDs don't exceed the database's bound parameter limit
         foreach (array_chunk(array_values(array_unique($ids)), 1000) as $batch) {
-            foreach ($this->getEntitiesByIds($batch, $this->existingFields) as $entity) {
+            foreach ($this->getEntitiesByIds($batch) as $entity) {
                 /** @var int|string $id */
                 $id = $entity[$this->idField];
                 $writable = Helpers::getMappedValues($this->selectableMap, $entity);
@@ -359,7 +363,7 @@ abstract class Entities
         $processedFilter = $this->processFilter($filter);
         $selectMap = Helpers::propMapToSelectMap($this->fullPropMap);
 
-        $prop = new Prop('count', 'COUNT(*)', false, true, 'count');
+        $prop = new Prop('count', 'COUNT(*)', alias: 'count');
         $queryOptions = new QueryOptions($processedFilter, $filter, [], [$prop]);
 
         $select = $this->db->select($this->getBaseSelect($queryOptions))

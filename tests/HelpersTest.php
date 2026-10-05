@@ -137,7 +137,7 @@ class HelpersTest extends TestCase
     public function testGetFieldPropMap(): void
     {
         $props = [
-            new Prop('username', 'UserName', isDefault: false),
+            new Prop('username', 'UserName', output: false),
             new Prop('client.id', 'ClientID', nullGroup: true),
             new Prop('client.name', 'Company', alias: 'ClientName'),
             new Prop('client.isDisabled', 'isDisabled'),
@@ -152,12 +152,18 @@ class HelpersTest extends TestCase
         $this->assertSame($expected, Helpers::getFieldPropMap([], $propMap));
 
         $expected = [
-            'username' => $propMap['username'],
             'group.type.id' => $propMap['group.type.id'],
             'group.type.name' => $propMap['group.type.name'],
         ];
 
-        $this->assertSame($expected, Helpers::getFieldPropMap(['username', 'group'], $propMap));
+        $this->assertSame($expected, Helpers::getFieldPropMap(['group'], $propMap));
+
+        try {
+            Helpers::getFieldPropMap(['username'], $propMap);
+            $this->fail('Failed to throw HttpException for field which is not output');
+        } catch (HttpException $e) {
+            $this->assertSame("'username' is not a valid field", $e->getMessage());
+        }
 
         $expected = ['client.isDisabled', 'groupName', 'client.id'];
         $actual = Helpers::getFieldPropMap(['client.isDisabled', 'groupName'], $propMap);
@@ -205,10 +211,10 @@ class HelpersTest extends TestCase
             $this->assertSame("' username' is not a valid field", $e->getMessage());
         }
 
-        // test dependent fields marked as not default or excluded from output
+        // test dependent fields excluded from output
         $dependencies = ['username', 'client.secret'];
         $props = [
-            new Prop('username', 'UserName', isDefault: false),
+            new Prop('username', 'UserName', output: false),
             new Prop('client.id', 'ClientID', nullGroup: true, getValue: $valueGetter, dependsOn: $dependencies),
             new Prop('client.name', 'Company', alias: 'ClientName'),
             new Prop('client.secret', 'Secret', output: false),
@@ -223,8 +229,15 @@ class HelpersTest extends TestCase
         $this->assertTrue($actual['client.name']->output);
         $this->assertFalse($actual['client.id']->output);
 
-        // username should be selected even though it isn't default since client.id is marked as dependent on it
-        $expected = ['client.id', 'client.name', 'client.secret', 'username'];
+        // subfields which aren't output are only selected since client.id depends on client.secret
+        $expected = ['client.id', 'client.name', 'username', 'client.secret'];
+        $actual = Helpers::getFieldPropMap(['client'], $propMap);
+        $this->assertSame($expected, array_keys($actual));
+        $this->assertTrue($actual['client.id']->output);
+        $this->assertFalse($actual['client.secret']->output);
+
+        // username and client.secret should be selected even though they aren't output since client.id depends on them
+        $expected = ['client.id', 'client.name', 'username', 'client.secret'];
         $actual = Helpers::getFieldPropMap([], $propMap);
         $this->assertSame($expected, array_keys($actual));
         $this->assertTrue($actual['client.id']->output);
@@ -238,7 +251,7 @@ class HelpersTest extends TestCase
         $getValue = fn(array $_row): string => '';
 
         try {
-            $prop = new Prop('test', 'col', false, true, '', null, false, $getValue, ['test']);
+            $prop = new Prop('test', 'col', getValue: $getValue, dependsOn: ['test']);
             Helpers::propListToPropMap([$prop]);
             $this->fail('Failed to throw exception for Prop that depends on itself');
         } catch (\Exception $e) {
@@ -246,7 +259,7 @@ class HelpersTest extends TestCase
         }
 
         try {
-            $prop = new Prop('isBillable', 'billable', false, true, '', null, false, $getValue, ['notAProp']);
+            $prop = new Prop('isBillable', 'billable', getValue: $getValue, dependsOn: ['notAProp']);
             Helpers::propListToPropMap([$prop]);
             $this->fail('Failed to throw exception for invalid dependsOn key value');
         } catch (\Exception $e) {

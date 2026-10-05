@@ -142,9 +142,9 @@ class Helpers
         $dependedOn = [];
 
         if ($fields === []) {
-            // select all default fields
+            // select all output fields
             foreach ($propMap as $prop => $data) {
-                if ($data->isDefault) {
+                if ($data->output) {
                     $fieldProps[$prop] = $data;
 
                     foreach ($data->dependsOn as $value) {
@@ -158,21 +158,24 @@ class Helpers
                 $matches = [];
 
                 if (isset($propMap[$field])) {
-                    $matches[$field] = $propMap[$field];
+                    if ($propMap[$field]->output) {
+                        $matches[$field] = $propMap[$field];
+                    }
                 } else {
                     // check for subfields
                     $parent = $field . '.';
                     $length = strlen($parent);
 
                     foreach ($propMap as $prop => $data) {
-                        if (substr($prop, 0, $length) === $parent) {
+                        if ($data->output && substr($prop, 0, $length) === $parent) {
                             $matches[$prop] = $data;
                         }
                     }
+                }
 
-                    if (count($matches) === 0) {
-                        throw new HttpException("'{$field}' is not a valid field", StatusCode::BAD_REQUEST);
-                    }
+                // fields which aren't output can only be selected when another field depends on them
+                if (count($matches) === 0) {
+                    throw new HttpException("'{$field}' is not a valid field", StatusCode::BAD_REQUEST);
                 }
 
                 foreach ($matches as $prop => $data) {

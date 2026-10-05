@@ -28,15 +28,9 @@ class ValidatedUsers extends Users
             return $row['weight'] > 100;
         };
 
-        $nameLength = function (array $row): int {
-            /** @var array{name: string} $row */
-            return strlen($row['name']);
-        };
-
         return [
             ...parent::getSelectProps(),
             new Prop('isHeavy', getValue: $isHeavy, dependsOn: ['weight']),
-            new Prop('nameLength', getValue: $nameLength, dependsOn: ['name'], isDefault: false),
         ];
     }
 

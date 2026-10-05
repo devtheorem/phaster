@@ -17,7 +17,7 @@ class PropTest extends TestCase
         }
 
         try {
-            new Prop('test', 'test', false, true, '', 'array');
+            new Prop('test', 'test', type: 'array');
             $this->fail('Failed to throw exception for invalid Prop type');
         } catch (\Exception $e) {
             $this->assertSame("type for test property must be bool, int, float, or string", $e->getMessage());
@@ -26,21 +26,21 @@ class PropTest extends TestCase
         $getValue = fn(array $_row): string => '';
 
         try {
-            new Prop('foo', 'foo', false, true, '', 'bool', false, $getValue);
+            new Prop('foo', 'foo', type: 'bool', getValue: $getValue);
             $this->fail('Failed to throw exception for type set along with getValue');
         } catch (\Exception $e) {
             $this->assertSame("type cannot be set on foo property along with getValue", $e->getMessage());
         }
 
         try {
-            new Prop('bar', 'bar', false, true, '', null, null, $getValue);
+            new Prop('bar', 'bar', timeZone: null, getValue: $getValue);
             $this->fail('Failed to throw exception for timeZone set along with getValue');
         } catch (\Exception $e) {
             $this->assertSame("timeZone cannot be set on bar property along with getValue", $e->getMessage());
         }
 
         try {
-            new Prop('isBillable', 'isBillable', false, true, '', null, false, null, ['isDisabled']);
+            new Prop('isBillable', 'isBillable', dependsOn: ['isDisabled']);
             $this->fail('Failed to throw exception for dependsOn key without getValue function');
         } catch (\Exception $e) {
             $this->assertSame("dependsOn cannot be used on isBillable property without getValue function", $e->getMessage());

@@ -46,8 +46,10 @@ class Users extends Entities
 
     // Return a list of `Prop` objects, which map properties to readable columns and/or values,
     // and enable setting a type to cast the column value to, or defining a virtual property
-    // which depends on other columns. See the Prop constructor for the full list of parameters
-    // that can be set. Returns an empty array by default.
+    // which depends on other columns. Set `output: false` for properties which are only used for
+    // filtering/sorting or by other properties, so they're only selected when another property
+    // depends on them (writable properties can't set it). See the Prop constructor for the full
+    // list of parameters that can be set. Returns an empty array by default.
     protected function getSelectProps(): array
     {
         return [
@@ -105,9 +107,10 @@ protected function getBaseSelect(QueryOptions $options): SqlParams
 To validate entities before they are inserted or updated, implement `validateEntity()`. `$entity` contains
 every property from `getMap()` with the values that will be saved. For partial updates, this is the existing
 entity with the patch merged in. When updating, `$entity` and `$existing` also contain the ID property,
-and `$existing` contains the default fields returned by `getEntityById()`, such as computed properties.
+and `$existing` contains the fields returned by `getEntityById()`, such as computed properties.
 `$existing` is null when inserting. Writable properties which aren't selectable (such as a password) aren't
-in `$existing`, and are only in `$entity` for partial updates if the patch sets them.
+in `$existing`, and are only in `$entity` for partial updates if the patch sets them. The ID property must be
+output, so the existing entities can be retrieved.
 
 ```php
 use Teapot\{HttpException, StatusCode};

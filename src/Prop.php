@@ -30,7 +30,6 @@ class Prop
         public readonly string $name,
         public readonly string $col = '',
         public readonly bool $nullGroup = false,
-        public readonly bool $isDefault = true,
         public readonly string $alias = '',
         public readonly ?string $type = null,
         public readonly DateTimeZone|false|null $timeZone = false,
