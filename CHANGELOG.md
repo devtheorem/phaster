@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [5.0.0] - 2026-10-05
 
 ### Added
 - `updateEntities()` method which replaces one or more rows, or updates them via a JSON Merge Patch
@@ -30,14 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (one in `getMap()`) now throws an exception.
 
 ### Removed
-- `afterInsert()` hook.
+- `afterInsert()` hook. Override `addEntities()` instead, using `processEntity()` and `insertRows()`.
 - `isDefault` `Prop` option. All output properties are now selected unless a subset of fields is
   requested, and properties which shouldn't be output can set `output: false` instead. Since this
   changes the position of the following parameters, any `Prop` arguments after `nullGroup` must now
   be passed by name.
 - `updateById()` and `patchByIds()` methods. Use `updateEntities()` instead.
 - Support for setting the ID of an existing row in `processValues()` to skip inserting it.
-  The ID is now treated like any other property, so a new row is inserted.
+  The ID is now treated like any other property, so a new row is inserted. To skip inserting rows,
+  override `addEntities()` instead.
 
 
 ## [4.2.0] - 2026-09-29
@@ -297,6 +298,7 @@ return early if passed an empty IDs array.
 - Initial stable release
 
 
+[5.0.0]: https://github.com/devtheorem/phaster/compare/v4.2.0...v5.0.0
 [4.2.0]: https://github.com/devtheorem/phaster/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/devtheorem/phaster/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/devtheorem/phaster/compare/v3.0.0...v4.0.0
