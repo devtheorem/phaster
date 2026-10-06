@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [5.1.0] - 2026-10-06
 
 ### Changed
 - `updateEntities()` and `deleteByIds()` now throw a 400 `HttpException` if the same ID is passed
@@ -311,6 +311,7 @@ return early if passed an empty IDs array.
 - Initial stable release
 
 
+[5.1.0]: https://github.com/devtheorem/phaster/compare/v5.0.0...v5.1.0
 [5.0.0]: https://github.com/devtheorem/phaster/compare/v4.2.0...v5.0.0
 [4.2.0]: https://github.com/devtheorem/phaster/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/devtheorem/phaster/compare/v4.0.0...v4.1.0
