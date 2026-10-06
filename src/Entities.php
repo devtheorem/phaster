@@ -180,6 +180,7 @@ abstract class Entities
     protected function validateEntity(array $entity, ?array $existing): void {}
 
     /**
+     * Throws a 400 HttpException if the same ID is passed more than once.
      * @param list<string|int> $ids
      */
     public function deleteByIds(array $ids): int
@@ -188,6 +189,8 @@ abstract class Entities
             return 0;
         }
 
+        self::checkDuplicateIds($ids);
+
         return $this->db->deleteFrom($this->getTableName(), [$this->idColumn => $ids]);
     }
 
@@ -195,7 +198,8 @@ abstract class Entities
      * Replace one or more rows, or update them via a JSON Merge Patch (https://tools.ietf.org/html/rfc7396) if $partial is true.
      * All mapped properties are required unless $partial is true.
      * If validateEntity() is implemented and any of the rows can't be selected, an HttpException with a
-     * 404 status is thrown, and no rows are updated.
+     * 404 status is thrown, and no rows are updated. A 400 HttpException is thrown if the same ID is
+     * passed more than once.
      * @param list<string|int> $ids
      * @param mixed[] $data
      */
@@ -204,6 +208,8 @@ abstract class Entities
         if (count($ids) === 0) {
             return 0;
         }
+
+        self::checkDuplicateIds($ids);
 
         $data = $this->processValues($data, $ids);
         $row = $partial
@@ -228,7 +234,6 @@ abstract class Entities
      */
     private function validateUpdates(array $ids, array $data, bool $partial): array
     {
-        $ids = array_values(array_unique($ids));
         $entities = [];
 
         // select in batches, so the IDs don't exceed the database's bound parameter limit
@@ -264,6 +269,17 @@ abstract class Entities
         }
 
         return $validatedIds;
+    }
+
+    /**
+     * @param list<string|int> $ids
+     */
+    private static function checkDuplicateIds(array $ids): void
+    {
+        // passing the same ID more than once is likely a client error
+        if (count(array_unique($ids)) !== count($ids)) {
+            throw new HttpException('Duplicate ID', StatusCode::BAD_REQUEST);
+        }
     }
 
     /**

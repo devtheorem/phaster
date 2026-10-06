@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `updateEntities()` and `deleteByIds()` now throw a 400 `HttpException` if the same ID is passed
+  more than once, since this is likely a client error.
+
 ### Fixed
 - When `validateEntity()` is implemented, `updateEntities()` now throws a 404 `HttpException` if any
   of the rows can't be selected, rather than skipping them and returning a lower count. This matches

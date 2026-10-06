@@ -118,6 +118,24 @@ abstract class DbTestCase extends TestCase
         $expected = array_map(fn($u) => [...$u, 'weight' => $weight(125.0)], $expected);
         $this->assertSame($expected, $entities->getEntitiesByIds($ids));
 
+        // passing the same ID more than once is an error, even if it's a different type
+        $duplicateIds = [$ids[0], $ids[1], (string) $ids[0]];
+        $calls = [
+            fn() => $entities->updateEntities($duplicateIds, ['weight' => 10.0], partial: true),
+            fn() => $entities->deleteByIds($duplicateIds),
+        ];
+
+        foreach ($calls as $call) {
+            try {
+                $call();
+                throw new \Exception('Failed to throw exception for duplicate ID');
+            } catch (HttpException $e) {
+                $this->assertSame('Duplicate ID', $e->getMessage());
+                $this->assertSame(StatusCode::BAD_REQUEST, $e->getCode());
+            }
+        }
+
+        $this->assertSame($expected, $entities->getEntitiesByIds($ids));
         $this->assertSame(2, $entities->deleteByIds($ids));
         $this->assertSame([], $entities->getEntitiesByIds($ids));
     }
@@ -155,9 +173,9 @@ abstract class DbTestCase extends TestCase
         ];
         $this->assertSame($expected, $entities->validated);
 
-        // a partial update validates each existing row once with the patch merged in
+        // a partial update validates each existing row with the patch merged in
         $entities->validated = [];
-        $this->assertSame(2, $entities->updateEntities([(string) $ids[0], $ids[1], $ids[1]], ['weight' => 25.0], partial: true));
+        $this->assertSame(2, $entities->updateEntities([(string) $ids[0], $ids[1]], ['weight' => 25.0], partial: true));
 
         // the existing entities also include computed fields, but not the unselectable birthday,
         // which is only in the updated entities if the patch sets it
