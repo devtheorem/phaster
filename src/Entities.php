@@ -194,7 +194,8 @@ abstract class Entities
     /**
      * Replace one or more rows, or update them via a JSON Merge Patch (https://tools.ietf.org/html/rfc7396) if $partial is true.
      * All mapped properties are required unless $partial is true.
-     * If validateEntity() is implemented, only rows which can be selected are validated and updated.
+     * If validateEntity() is implemented and any of the rows can't be selected, an HttpException with a
+     * 404 status is thrown, and no rows are updated.
      * @param list<string|int> $ids
      * @param mixed[] $data
      */
@@ -211,10 +212,6 @@ abstract class Entities
 
         if ($this->validatesEntities) {
             $ids = $this->validateUpdates($ids, $data, $partial);
-
-            if (count($ids) === 0) {
-                return 0;
-            }
         }
 
         $row = $this->processRow($row, $ids);
@@ -223,31 +220,47 @@ abstract class Entities
     }
 
     /**
-     * Calls validateEntity() for each existing row, and returns the IDs of the rows that were validated.
+     * Calls validateEntity() for each existing row, and returns the IDs of the rows to update.
+     * Throws a 404 HttpException if any of the rows can't be selected.
      * @param list<string|int> $ids
      * @param mixed[] $data
      * @return list<string|int>
      */
     private function validateUpdates(array $ids, array $data, bool $partial): array
     {
-        $validatedIds = [];
+        $ids = array_values(array_unique($ids));
+        $entities = [];
 
         // select in batches, so the IDs don't exceed the database's bound parameter limit
-        foreach (array_chunk(array_values(array_unique($ids)), 1000) as $batch) {
+        foreach (array_chunk($ids, 1000) as $batch) {
             foreach ($this->getEntitiesByIds($batch) as $entity) {
                 /** @var int|string $id */
                 $id = $entity[$this->idField];
-                $writable = Helpers::getMappedValues($this->selectableMap, $entity);
-                // writable properties in a null group are set to null rather than removing the group
-                /** @var array<string, mixed> $existing */
-                $existing = array_replace_recursive($entity, $writable);
-                $updated = $partial ? array_replace_recursive($writable, $data) : $data;
-                // writable properties which aren't selectable are only included if they're being set,
-                // and the ID is first, but a mapped ID property overrides its value
-                $updated = [$this->idField => $id, ...Helpers::getMappedValues($this->map, $updated, fillMissing: false)];
-                $this->validateEntity($updated, $existing);
-                $validatedIds[] = $id;
+                // the base query can return a row more than once if it joins other tables
+                $entities[$id] ??= $entity;
             }
+        }
+
+        // compare counts rather than ID values, since the database may match IDs of a different type or case
+        if (count($entities) < count($ids)) {
+            throw new HttpException('Invalid ID', StatusCode::NOT_FOUND);
+        }
+
+        $validatedIds = [];
+
+        foreach ($entities as $entity) {
+            /** @var int|string $id */
+            $id = $entity[$this->idField];
+            $writable = Helpers::getMappedValues($this->selectableMap, $entity);
+            // writable properties in a null group are set to null rather than removing the group
+            /** @var array<string, mixed> $existing */
+            $existing = array_replace_recursive($entity, $writable);
+            $updated = $partial ? array_replace_recursive($writable, $data) : $data;
+            // writable properties which aren't selectable are only included if they're being set,
+            // and the ID is first, but a mapped ID property overrides its value
+            $updated = [$this->idField => $id, ...Helpers::getMappedValues($this->map, $updated, fillMissing: false)];
+            $this->validateEntity($updated, $existing);
+            $validatedIds[] = $id;
         }
 
         return $validatedIds;

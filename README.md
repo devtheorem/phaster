@@ -110,7 +110,9 @@ entity with the patch merged in. When updating, `$entity` and `$existing` also c
 and `$existing` contains the fields returned by `getEntityById()`, such as computed properties.
 `$existing` is null when inserting. Writable properties which aren't selectable (such as a password) aren't
 in `$existing`, and are only in `$entity` for partial updates if the patch sets them. The ID property must be
-output, so the existing entities can be retrieved.
+output, so the existing entities can be retrieved. If any of the rows being updated can't be selected (e.g.
+because the ID doesn't exist or is excluded by `processFilter()`), a 404 `HttpException` is thrown and no rows
+are updated.
 
 ```php
 use Teapot\{HttpException, StatusCode};

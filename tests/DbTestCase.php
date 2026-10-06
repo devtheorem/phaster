@@ -3,11 +3,11 @@
 namespace DevTheorem\Phaster\Test;
 
 use DevTheorem\PeachySQL\PeachySql;
-use DevTheorem\Phaster\Prop;
+use DevTheorem\Phaster\{Prop, QueryOptions};
 use DevTheorem\Phaster\Test\src\{ConcurrentRows, LegacyUsers, ModernUsers, Users, ValidatedUsers};
 use PDO;
 use PHPUnit\Framework\TestCase;
-use Teapot\HttpException;
+use Teapot\{HttpException, StatusCode};
 
 abstract class DbTestCase extends TestCase
 {
@@ -155,9 +155,9 @@ abstract class DbTestCase extends TestCase
         ];
         $this->assertSame($expected, $entities->validated);
 
-        // a partial update validates each existing row with the patch merged in, and skips missing rows
+        // a partial update validates each existing row once with the patch merged in
         $entities->validated = [];
-        $this->assertSame(2, $entities->updateEntities([(string) $ids[0], $ids[1], 0], ['weight' => 25.0], partial: true));
+        $this->assertSame(2, $entities->updateEntities([(string) $ids[0], $ids[1], $ids[1]], ['weight' => 25.0], partial: true));
 
         // the existing entities also include computed fields, but not the unselectable birthday,
         // which is only in the updated entities if the patch sets it
@@ -195,9 +195,19 @@ abstract class DbTestCase extends TestCase
         $expected = [['entity' => ['id' => $ids[0], ...$replacement], 'existing' => [...$existing1, 'weight' => $weight(25.0)]]];
         $this->assertSame($expected, $entities->validated);
 
+        // no rows are updated or validated if any of them don't exist
         $entities->validated = [];
-        $this->assertSame(0, $entities->updateEntities([0], ['weight' => 10.0], partial: true));
+
+        try {
+            $entities->updateEntities([$ids[0], 0], ['weight' => 10.0], partial: true);
+            throw new \Exception('Failed to throw exception for invalid ID');
+        } catch (HttpException $e) {
+            $this->assertSame('Invalid ID', $e->getMessage());
+            $this->assertSame(StatusCode::NOT_FOUND, $e->getCode());
+        }
+
         $this->assertSame([], $entities->validated);
+        $this->assertSame($weight(40.0), $entities->getEntityById($ids[0], ['weight'])['weight']);
 
         // computed fields in the existing entity reflect the values before the update
         $this->assertSame(1, $entities->updateEntities([$ids[0]], ['weight' => 150.0, 'isDisabled' => false], partial: true));
@@ -236,6 +246,31 @@ abstract class DbTestCase extends TestCase
             $this->assertSame('Writable weight property cannot have output: false', $e->getMessage());
         }
 
+        // a row returned more than once by a joined base query is validated once, and doesn't hide a missing ID
+        $db->insertRow('UserThings', ['user_id' => $ids[1]]);
+        $db->insertRow('UserThings', ['user_id' => $ids[1]]);
+
+        $joined = new class ($db) extends ValidatedUsers {
+            protected function getBaseQuery(QueryOptions $options): string
+            {
+                return "SELECT {$options->getColumns()} FROM Users u
+                    INNER JOIN (SELECT user_id AS thing_user FROM UserThings) t ON t.thing_user = u.user_id";
+            }
+        };
+
+        $this->assertCount(2, $joined->getEntitiesByIds([$ids[1]]));
+
+        try {
+            $joined->updateEntities([$ids[1], 0], ['weight' => 30.0], partial: true);
+            throw new \Exception('Failed to throw exception for invalid ID');
+        } catch (HttpException $e) {
+            $this->assertSame('Invalid ID', $e->getMessage());
+        }
+
+        $this->assertSame(1, $joined->updateEntities([$ids[1]], ['weight' => 30.0], partial: true));
+        $this->assertCount(1, $joined->validated);
+
+        $db->deleteFrom('UserThings', ['user_id' => $ids[1]]);
         $this->assertSame(2, $entities->deleteByIds($ids));
     }
 

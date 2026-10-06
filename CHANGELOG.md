@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- When `validateEntity()` is implemented, `updateEntities()` now throws a 404 `HttpException` if any
+  of the rows can't be selected, rather than skipping them and returning a lower count. This matches
+  the behavior of checking access with `getEntityById()` before updating. A row returned more than
+  once by the base query is now only validated once.
+
+
 ## [5.0.0] - 2026-10-05
 
 ### Added
