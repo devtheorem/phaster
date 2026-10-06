@@ -65,7 +65,8 @@ class Users extends Entities
 
     // Return a SELECT SQL query (without a WHERE clause) in order to join other tables when
     // selecting data. If not implemented, mapped columns will be selected from the table
-    // returned by getTableName().
+    // returned by getTableName(). Joins must not return more than one row per entity, so
+    // join one-to-many tables via an aggregate subquery or check them with EXISTS instead.
     protected function getBaseQuery(QueryOptions $options): string
     {
         return "SELECT {$options->getColumns()}
